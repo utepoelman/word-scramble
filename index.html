@@ -87,7 +87,6 @@
             border: 1px solid rgba(255, 255, 255, 0.6);
         }
 
-        /* Custom scrollbar for word list */
         textarea::-webkit-scrollbar {
             width: 8px;
         }
@@ -141,7 +140,7 @@
                 <div class="relative z-10 max-w-2xl">
                     <span class="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider inline-block mb-3 backdrop-blur-sm">No Backend Required</span>
                     <h1 class="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mb-2">Create Custom Word Scrambles</h1>
-                    <p class="text-brand-100 text-sm sm:text-base leading-relaxed">Design engaging puzzle sets for your classroom in seconds. Enter your vocabulary words, generate a share code, and send it straight to your students!</p>
+                    <p class="text-brand-100 text-sm sm:text-base leading-relaxed">Design engaging puzzle sets for your classroom in seconds. Enter your vocabulary words, choose your order preferences, generate a share code, and send it straight to your students!</p>
                 </div>
             </div>
 
@@ -176,6 +175,15 @@
                                 <option value="original">Keep Original Case</option>
                             </select>
                         </div>
+                    </div>
+
+                    <!-- Word Order Option Checkbox -->
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+                        <div>
+                            <label for="input-randomize" class="font-bold text-slate-800 text-sm cursor-pointer block">Randomize word order for students</label>
+                            <span class="text-xs text-slate-500 block">Uncheck to keep words in the exact sequence entered below.</span>
+                        </div>
+                        <input type="checkbox" id="input-randomize" checked class="w-5 h-5 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer accent-brand-600">
                     </div>
 
                     <div>
@@ -249,7 +257,7 @@
 
         <!-- STUDENT PLAY VIEW -->
         <section id="view-student" class="space-y-6 hidden">
-            <!-- Code Entry Modal/Bar if not yet loaded -->
+            <!-- Code Entry Bar -->
             <div id="student-code-entry" class="max-w-md mx-auto bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl text-center space-y-6">
                 <div class="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
                     <i class="fa-solid fa-key"></i>
@@ -408,26 +416,24 @@
         // Global App State
         let currentActivity = null;
         let gameState = {
+            activeWords: [], // Order of words for current play session
             currentIndex: 0,
             score: 0,
             timerSeconds: 0,
             timerInterval: null,
-            userAnswer: [], // Letters moved to answer slot
-            scrambledLetters: [], // Letter objects currently in pool
-            wordsStats: [], // Log per word: { original, solved, time, hintsUsed }
+            userAnswer: [],
+            scrambledLetters: [],
+            wordsStats: [],
             hintsUsedForCurrent: false
         };
 
         // Initialize on page load
         window.onload = function() {
-            // Event listeners for teacher live preview
             document.getElementById('input-words').addEventListener('input', updateLivePreview);
             document.getElementById('input-case').addEventListener('change', updateLivePreview);
 
-            // Global Keypress Support for Student Mode
             window.addEventListener('keydown', handleKeyboardInput);
 
-            // Check if URL contains hash payload
             if (window.location.hash && window.location.hash.length > 1) {
                 const code = window.location.hash.substring(1);
                 switchTab('student');
@@ -458,7 +464,17 @@
             }
         }
 
-        // Robust Word Scramble Algorithm
+        // Generic Fisher-Yates Array Shuffle
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // Word Scramble Algorithm
         function scrambleWord(word) {
             const cleanWord = word.trim();
             if (cleanWord.length <= 2) return cleanWord;
@@ -468,7 +484,6 @@
             let attempts = 0;
 
             do {
-                // Fisher-Yates Shuffle algorithm
                 for (let i = letters.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [letters[i], letters[j]] = [letters[j], letters[i]];
@@ -480,7 +495,6 @@
             return scrambled;
         }
 
-        // Parse Teacher Input Textarea
         function parseWordList() {
             const rawText = document.getElementById('input-words').value;
             const forceUpper = document.getElementById('input-case').value === 'upper';
@@ -509,7 +523,6 @@
             return items;
         }
 
-        // Live Preview Renderer in Teacher Mode
         function updateLivePreview() {
             const items = parseWordList();
             const previewList = document.getElementById('preview-list');
@@ -522,7 +535,7 @@
                 return;
             }
 
-            previewList.innerHTML = items.map((item, idx) => `
+            previewList.innerHTML = items.map((item) => `
                 <div class="p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between text-sm">
                     <div class="truncate mr-2">
                         <span class="font-bold text-slate-800">${escapeHtml(item.original)}</span>
@@ -542,15 +555,17 @@
                 return;
             }
 
+            const randomizeSetting = document.getElementById('input-randomize').checked;
+
             const payload = {
                 t: document.getElementById('input-title').value.trim() || 'Word Scramble Challenge',
                 i: document.getElementById('input-instructions').value.trim() || 'Unscramble each word correctly!',
                 tm: parseInt(document.getElementById('input-timer').value, 10) || 0,
+                r: randomizeSetting ? 1 : 0, // Randomize setting flag
                 w: items.map(item => [item.original, item.hint])
             };
 
             try {
-                // Encode to URL-safe Base64 String
                 const jsonStr = JSON.stringify(payload);
                 const encoded = btoa(encodeURIComponent(jsonStr));
 
@@ -594,15 +609,14 @@
                     title: data.t,
                     instructions: data.i,
                     timerLimit: data.tm,
+                    randomize: data.r === 1,
                     words: data.w.map(arr => ({ original: arr[0], hint: arr[1] }))
                 };
 
-                // Show Game view
                 document.getElementById('student-code-entry').classList.add('hidden');
                 document.getElementById('student-completion-card').classList.add('hidden');
                 document.getElementById('student-game-container').classList.remove('hidden');
 
-                // Initialize Game State
                 initGame();
             } catch (e) {
                 console.error("Decoding error:", e);
@@ -615,6 +629,13 @@
             gameState.score = 0;
             gameState.timerSeconds = currentActivity.timerLimit > 0 ? currentActivity.timerLimit : 0;
             gameState.wordsStats = [];
+
+            // Apply randomization rule based on teacher selection
+            if (currentActivity.randomize) {
+                gameState.activeWords = shuffleArray(currentActivity.words);
+            } else {
+                gameState.activeWords = [...currentActivity.words];
+            }
 
             document.getElementById('game-title').textContent = currentActivity.title;
             document.getElementById('game-instructions').textContent = currentActivity.instructions;
@@ -630,7 +651,6 @@
 
             gameState.timerInterval = setInterval(() => {
                 if (currentActivity.timerLimit > 0) {
-                    // Countdown
                     gameState.timerSeconds--;
                     updateTimerDisplay();
                     if (gameState.timerSeconds <= 0) {
@@ -638,7 +658,6 @@
                         completeGame();
                     }
                 } else {
-                    // Count Up
                     gameState.timerSeconds++;
                     updateTimerDisplay();
                 }
@@ -652,7 +671,7 @@
         }
 
         function loadWordIndex(index) {
-            if (index >= currentActivity.words.length) {
+            if (index >= gameState.activeWords.length) {
                 completeGame();
                 return;
             }
@@ -661,23 +680,20 @@
             gameState.hintsUsedForCurrent = false;
             gameState.userAnswer = [];
 
-            const currentWordObj = currentActivity.words[index];
+            const currentWordObj = gameState.activeWords[index];
             const scrambledStr = scrambleWord(currentWordObj.original);
 
-            // Create Indexed Tile objects
             gameState.scrambledLetters = scrambledStr.split('').map((char, i) => ({
                 id: `tile-${i}-${Math.random().toString(36).substr(2, 4)}`,
                 char: char
             }));
 
-            // Progress UI
-            const total = currentActivity.words.length;
+            const total = gameState.activeWords.length;
             document.getElementById('game-progress-text').textContent = `Word ${index + 1} of ${total}`;
             const pct = Math.round((index / total) * 100);
             document.getElementById('game-progress-bar').style.width = `${pct}%`;
             document.getElementById('game-progress-percent').textContent = `${pct}%`;
 
-            // Hint Banner setup
             const hintBanner = document.getElementById('hint-banner');
             const btnHint = document.getElementById('btn-hint');
             if (currentWordObj.hint) {
@@ -692,7 +708,6 @@
             renderTiles();
         }
 
-        // Render Letter Slots and Letter Pool
         function renderTiles() {
             const answerContainer = document.getElementById('answer-slots-container');
             const poolContainer = document.getElementById('scrambled-letters-container');
@@ -700,10 +715,9 @@
             answerContainer.innerHTML = '';
             poolContainer.innerHTML = '';
 
-            const currentWordObj = currentActivity.words[gameState.currentIndex];
+            const currentWordObj = gameState.activeWords[gameState.currentIndex];
             const wordLength = currentWordObj.original.length;
 
-            // Render Selected Answer Slots
             for (let i = 0; i < wordLength; i++) {
                 const tileObj = gameState.userAnswer[i];
                 if (tileObj) {
@@ -719,7 +733,6 @@
                 }
             }
 
-            // Render Scrambled Pool
             gameState.scrambledLetters.forEach((tileObj) => {
                 const btn = document.createElement('button');
                 btn.className = "tile w-12 h-14 sm:w-14 sm:h-16 bg-slate-100 text-slate-800 font-display font-extrabold text-2xl rounded-2xl shadow-sm border border-slate-200 border-b-4 border-slate-300 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:border-slate-400";
@@ -729,7 +742,6 @@
             });
         }
 
-        // Letter Tile Interactions
         function selectLetter(tileObj) {
             gameState.scrambledLetters = gameState.scrambledLetters.filter(t => t.id !== tileObj.id);
             gameState.userAnswer.push(tileObj);
@@ -756,21 +768,18 @@
             const hintBanner = document.getElementById('hint-banner');
             if (hintBanner.classList.contains('hidden')) {
                 hintBanner.classList.remove('hidden');
+                // Point deduction for hints is exactly 10 points
                 gameState.score = Math.max(0, gameState.score - 10);
                 document.getElementById('game-score').textContent = gameState.score;
                 gameState.hintsUsedForCurrent = true;
             }
         }
 
-        // Keyboard Support
         function handleKeyboardInput(e) {
             const studentView = document.getElementById('view-student');
             const gameContainer = document.getElementById('student-game-container');
             
-            // Only capture keyboard in active student play view
             if (studentView.classList.contains('hidden') || gameContainer.classList.contains('hidden')) return;
-
-            // Ignore typing inside input fields
             if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
             const key = e.key;
@@ -784,7 +793,6 @@
                 e.preventDefault();
                 checkAnswer();
             } else if (key.length === 1 && key.match(/[a-z0-9]/i)) {
-                // Find matching char in pool
                 const matchingTile = gameState.scrambledLetters.find(t => t.char.toLowerCase() === key.toLowerCase());
                 if (matchingTile) {
                     selectLetter(matchingTile);
@@ -792,16 +800,14 @@
             }
         }
 
-        // Answer Verification
         function checkAnswer() {
-            const currentWordObj = currentActivity.words[gameState.currentIndex];
+            const currentWordObj = gameState.activeWords[gameState.currentIndex];
             const targetWord = currentWordObj.original;
             const submittedStr = gameState.userAnswer.map(t => t.char).join('');
 
             const arena = document.getElementById('answer-slots-container');
 
             if (submittedStr === targetWord) {
-                // Correct Answer
                 confetti({
                     particleCount: 40,
                     spread: 60,
@@ -827,9 +833,8 @@
                 }, 800);
 
             } else {
-                // Incorrect - trigger shake animation
                 arena.classList.remove('animate-shake');
-                void arena.offsetWidth; // Trigger reflow
+                void arena.offsetWidth;
                 arena.classList.add('animate-shake');
 
                 showToast("Not quite right, try again!", "error");
@@ -837,7 +842,7 @@
         }
 
         function skipWord() {
-            const currentWordObj = currentActivity.words[gameState.currentIndex];
+            const currentWordObj = gameState.activeWords[gameState.currentIndex];
             gameState.wordsStats.push({
                 original: currentWordObj.original,
                 solved: false,
@@ -854,17 +859,14 @@
             document.getElementById('student-game-container').classList.add('hidden');
             document.getElementById('student-completion-card').classList.remove('hidden');
 
-            // Grand Confetti Blast
             confetti({
                 particleCount: 120,
                 spread: 100,
                 origin: { y: 0.5 }
             });
 
-            // Final Stats Calculation
             document.getElementById('final-score').textContent = gameState.score;
             
-            // Format time string
             let timeElapsed = gameState.timerSeconds;
             if (currentActivity.timerLimit > 0) {
                 timeElapsed = currentActivity.timerLimit - gameState.timerSeconds;
@@ -874,10 +876,9 @@
             document.getElementById('final-time').textContent = `${m}:${s}`;
 
             const solvedCount = gameState.wordsStats.filter(w => w.solved).length;
-            const accuracyPct = Math.round((solvedCount / currentActivity.words.length) * 100) || 0;
+            const accuracyPct = Math.round((solvedCount / gameState.activeWords.length) * 100) || 0;
             document.getElementById('final-accuracy').textContent = `${accuracyPct}%`;
 
-            // Summary List
             const summaryList = document.getElementById('summary-word-list');
             summaryList.innerHTML = gameState.wordsStats.map(w => `
                 <div class="flex items-center justify-between p-2.5 rounded-xl ${w.solved ? 'bg-emerald-50 text-emerald-900 border border-emerald-100' : 'bg-slate-50 text-slate-500'} text-xs font-semibold">
@@ -896,7 +897,6 @@
             initGame();
         }
 
-        // Utility: Copy to Clipboard
         function copyToClipboard(inputId, successMsg) {
             const inputEl = document.getElementById(inputId);
             inputEl.select();
@@ -904,7 +904,6 @@
             showToast(successMsg, "success");
         }
 
-        // Utility: Toast Notification
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toast-message');
@@ -931,7 +930,6 @@
             }, 2500);
         }
 
-        // Utility: HTML Sanitize
         function escapeHtml(str) {
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
