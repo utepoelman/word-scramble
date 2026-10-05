@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Scramble Studio</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f3ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        },
+                        fun: {
+                            coral: '#ff6b6b',
+                            teal: '#2ec4b6',
+                            yellow: '#ffbf69',
+                            purple: '#845ec2',
+                        }
+                    },
+                    animation: {
+                        'bounce-short': 'bounce 0.5s ease-in-out 1',
+                        'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+                        'pop': 'pop 0.2s ease-out forwards',
+                    },
+                    keyframes: {
+                        shake: {
+                            '10%, 90%': { transform: 'translate3d(-2px, 0, 0)' },
+                            '20%, 80%': { transform: 'translate3d(4px, 0, 0)' },
+                            '30%, 50%, 70%': { transform: 'translate3d(-6px, 0, 0)' },
+                            '40%, 60%': { transform: 'translate3d(6px, 0, 0)' },
+                        },
+                        pop: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#e2e8f0 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+        }
+
+        .tile {
+            touch-action: manipulation;
+            user-select: none;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tile:active {
+            transform: scale(0.92);
+        }
+
+        .tile-slot {
+            background-color: rgba(226, 232, 240, 0.6);
+            border: 2px dashed #cbd5e1;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        /* Custom scrollbar for word list */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+    <!-- Navigation Bar -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('teacher')">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-fun-purple text-white flex items-center justify-center shadow-lg shadow-brand-500/20 font-display font-extrabold text-xl">
+                    <i class="fa-solid fa-shapes"></i>
+                </div>
+                <div>
+                    <span class="font-display font-bold text-xl tracking-tight text-slate-900 block leading-tight">WordScramble</span>
+                    <span class="text-xs font-semibold text-brand-600 uppercase tracking-widest">Studio</span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-xl">
+                <button id="nav-teacher-btn" onclick="switchTab('teacher')" class="px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center space-x-2 bg-white text-brand-600 shadow-sm">
+                    <i class="fa-solid fa-pen-ruler"></i>
+                    <span class="hidden sm:inline">Teacher Creator</span>
+                </button>
+                <button id="nav-student-btn" onclick="switchTab('student')" class="px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center space-x-2 text-slate-600 hover:text-slate-900">
+                    <i class="fa-solid fa-gamepad"></i>
+                    <span class="hidden sm:inline">Play Activity</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
+
+        <!-- TEACHER CREATOR VIEW -->
+        <section id="view-teacher" class="space-y-6">
+            <div class="bg-gradient-to-r from-brand-600 via-fun-purple to-indigo-700 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-brand-500/10 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-60 h-60 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="relative z-10 max-w-2xl">
+                    <span class="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider inline-block mb-3 backdrop-blur-sm">No Backend Required</span>
+                    <h1 class="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mb-2">Create Custom Word Scrambles</h1>
+                    <p class="text-brand-100 text-sm sm:text-base leading-relaxed">Design engaging puzzle sets for your classroom in seconds. Enter your vocabulary words, generate a share code, and send it straight to your students!</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Setup Form -->
+                <div class="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Activity Title</label>
+                        <input type="text" id="input-title" placeholder="e.g., Solar System Vocabulary" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none font-medium text-slate-800">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Instructions for Students</label>
+                        <input type="text" id="input-instructions" placeholder="Unscramble all words as fast as you can!" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none font-medium text-slate-800">
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Time Limit</label>
+                            <select id="input-timer" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none font-medium text-slate-800 bg-white">
+                                <option value="0">Untimed (Count Up)</option>
+                                <option value="60">1 Minute per set</option>
+                                <option value="180">3 Minutes per set</option>
+                                <option value="300" selected>5 Minutes per set</option>
+                                <option value="600">10 Minutes per set</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Letter Case Strategy</label>
+                            <select id="input-case" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none font-medium text-slate-800 bg-white">
+                                <option value="upper" selected>ALL UPPERCASE</option>
+                                <option value="original">Keep Original Case</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-sm font-bold text-slate-700">Word List & Hints</label>
+                            <span class="text-xs text-slate-400 font-medium">Format: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-600">Word : Hint</code></span>
+                        </div>
+                        <textarea id="input-words" rows="7" placeholder="MERCURY : Closest planet to the Sun&#10;VENUS : Hottest planet in solar system&#10;EARTH : Our home planet&#10;MARS : The red planet" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none font-mono text-sm leading-relaxed text-slate-800 resize-none"></textarea>
+                        <p class="text-xs text-slate-500 mt-1.5"><i class="fa-solid fa-circle-info mr-1 text-brand-500"></i> Enter one word per line. Adding a colon <code class="bg-slate-100 px-1 rounded">:</code> allows you to set an optional hint.</p>
+                    </div>
+
+                    <button onclick="generateActivityCode()" class="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-display font-bold text-lg rounded-xl shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-200 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>Generate Share Code & Link</span>
+                    </button>
+                </div>
+
+                <!-- Live Preview & Share Area -->
+                <div class="lg:col-span-5 space-y-6 flex flex-col">
+                    <!-- Share Code Output Container -->
+                    <div id="share-output-card" class="bg-slate-900 text-white rounded-3xl p-6 shadow-xl space-y-4 hidden animate-pop">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <span class="text-xs font-bold text-fun-teal uppercase tracking-widest flex items-center">
+                                <i class="fa-solid fa-circle-check mr-2"></i> Activity Ready!
+                            </span>
+                            <span class="text-xs text-slate-400">Share with students</span>
+                        </div>
+
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Activity Share Code</label>
+                            <div class="flex items-center space-x-2">
+                                <input type="text" id="output-share-code" readonly class="bg-slate-800 border border-slate-700 text-fun-yellow font-mono text-xl font-bold px-4 py-2.5 rounded-xl w-full text-center tracking-widest focus:outline-none">
+                                <button onclick="copyToClipboard('output-share-code', 'Code Copied!')" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl transition-all flex items-center space-x-1 shrink-0">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span class="hidden sm:inline text-sm">Copy</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Direct Shareable Link</label>
+                            <div class="flex items-center space-x-2">
+                                <input type="text" id="output-share-link" readonly class="bg-slate-800 border border-slate-700 text-slate-300 text-xs px-3 py-2.5 rounded-xl w-full focus:outline-none truncate">
+                                <button onclick="copyToClipboard('output-share-link', 'Link Copied!')" class="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-all shrink-0 text-xs">
+                                    <i class="fa-solid fa-link"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            <button onclick="launchStudentWithCurrentCode()" class="w-full py-3 bg-fun-teal hover:bg-teal-500 text-slate-950 font-bold rounded-xl text-sm transition-all flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-play"></i>
+                                <span>Test-Play This Activity Now</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Live Word Set Preview -->
+                    <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex-grow flex flex-col">
+                        <h3 class="font-display font-bold text-slate-900 text-lg mb-3 flex items-center justify-between">
+                            <span><i class="fa-solid fa-eye text-brand-500 mr-2"></i>Live Word Preview</span>
+                            <span id="preview-count" class="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">0 Words</span>
+                        </h3>
+                        <div id="preview-list" class="space-y-2 flex-grow overflow-y-auto max-h-[380px] pr-1">
+                            <p class="text-slate-400 text-sm italic text-center py-10">Start entering words in the editor to see your scrambled preview here!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- STUDENT PLAY VIEW -->
+        <section id="view-student" class="space-y-6 hidden">
+            <!-- Code Entry Modal/Bar if not yet loaded -->
+            <div id="student-code-entry" class="max-w-md mx-auto bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl text-center space-y-6">
+                <div class="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
+                    <i class="fa-solid fa-key"></i>
+                </div>
+                <div>
+                    <h2 class="font-display text-2xl font-extrabold text-slate-900 mb-1">Enter Share Code</h2>
+                    <p class="text-sm text-slate-500">Paste the activity code provided by your teacher to begin.</p>
+                </div>
+                <div class="space-y-3">
+                    <input type="text" id="student-code-input" placeholder="e.g. EYJ0aXRsZSI6..." class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all text-center font-mono font-bold text-slate-800 outline-none">
+                    <button onclick="loadActivityFromInput()" class="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center space-x-2">
+                        <span>Load Puzzle Set</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Play Game Container -->
+            <div id="student-game-container" class="max-w-3xl mx-auto space-y-6 hidden">
+
+                <!-- Header Stats Bar -->
+                <div class="glass-card rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div>
+                        <h2 id="game-title" class="font-display font-extrabold text-lg sm:text-xl text-slate-900 leading-snug">Activity Title</h2>
+                        <p id="game-instructions" class="text-xs text-slate-500">Unscramble the words!</p>
+                    </div>
+                    <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
+                        <!-- Score Display -->
+                        <div class="bg-amber-50 border border-amber-200/80 px-3 py-1.5 rounded-xl text-center">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600 block leading-tight">Score</span>
+                            <span id="game-score" class="font-display font-extrabold text-lg text-amber-700 leading-tight">0</span>
+                        </div>
+                        <!-- Timer Display -->
+                        <div class="bg-indigo-50 border border-indigo-200/80 px-3 py-1.5 rounded-xl text-center">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block leading-tight">Time</span>
+                            <span id="game-timer" class="font-display font-extrabold text-lg text-indigo-700 leading-tight">00:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Word Progress Bar -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs font-bold text-slate-500">
+                        <span id="game-progress-text">Word 1 of 5</span>
+                        <span id="game-progress-percent">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                        <div id="game-progress-bar" class="bg-brand-600 h-full transition-all duration-300 w-0"></div>
+                    </div>
+                </div>
+
+                <!-- Main Word Arena -->
+                <div class="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/80 shadow-md text-center space-y-8 relative overflow-hidden">
+
+                    <!-- Hint Display Banner -->
+                    <div id="hint-banner" class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl text-sm font-medium inline-flex items-center space-x-2 max-w-full hidden animate-pop">
+                        <i class="fa-solid fa-lightbulb text-amber-500 shrink-0"></i>
+                        <span id="hint-text" class="truncate"></span>
+                    </div>
+
+                    <!-- Answer Target Area (Selected Letter Slots) -->
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Your Answer</div>
+                        <div id="answer-slots-container" class="flex flex-wrap items-center justify-center gap-2 min-h-[64px]">
+                            <!-- Dynamic Letter Slots populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Scrambled Letters Pool -->
+                    <div class="pt-2 border-t border-slate-100">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Click or Type Available Letters</div>
+                        <div id="scrambled-letters-container" class="flex flex-wrap items-center justify-center gap-2 min-h-[64px]">
+                            <!-- Dynamic Scrambled Letters populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Controls Action Bar -->
+                    <div class="flex flex-wrap items-center justify-center gap-3 pt-4">
+                        <button onclick="resetCurrentWord()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Clear</span>
+                        </button>
+                        <button id="btn-hint" onclick="revealHint()" class="px-4 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-xl text-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-regular fa-lightbulb"></i>
+                            <span>Hint (-10 pts)</span>
+                        </button>
+                        <button onclick="skipWord()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-forward"></i>
+                            <span>Skip</span>
+                        </button>
+                        <button onclick="checkAnswer()" class="px-6 py-2.5 bg-fun-teal hover:bg-teal-500 text-slate-950 font-extrabold rounded-xl text-sm transition-all shadow-md flex items-center space-x-1.5">
+                            <i class="fa-solid fa-check"></i>
+                            <span>Submit Answer</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GAME COMPLETION SCREEN -->
+            <div id="student-completion-card" class="max-w-xl mx-auto bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xl text-center space-y-6 hidden animate-pop">
+                <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto text-3xl font-extrabold shadow-inner">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+
+                <div>
+                    <h2 class="font-display text-3xl font-extrabold text-slate-900 mb-1">Set Completed!</h2>
+                    <p class="text-slate-500 text-sm">Great job working through the word scramble!</p>
+                </div>
+
+                <!-- Final Stats breakdown grid -->
+                <div class="grid grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Final Score</span>
+                        <span id="final-score" class="font-display font-extrabold text-2xl text-brand-600">0</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Time Taken</span>
+                        <span id="final-time" class="font-display font-extrabold text-2xl text-slate-800">00:00</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Accuracy</span>
+                        <span id="final-accuracy" class="font-display font-extrabold text-2xl text-fun-teal">100%</span>
+                    </div>
+                </div>
+
+                <!-- Summary Breakdown List -->
+                <div class="text-left space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Word Summary</h4>
+                    <div id="summary-word-list" class="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <div class="pt-2 flex flex-col sm:flex-row gap-3">
+                    <button onclick="restartActivity()" class="flex-1 py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>Play Again</span>
+                    </button>
+                    <button onclick="switchTab('teacher')" class="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Create New Set</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Notification Toast Container -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl font-medium text-sm transition-all duration-300 opacity-0 translate-y-10 pointer-events-none z-50 flex items-center space-x-2">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-fun-teal"></i>
+        <span id="toast-message">Notification message</span>
+    </div>
+
+    <script>
+        // Global App State
+        let currentActivity = null;
+        let gameState = {
+            currentIndex: 0,
+            score: 0,
+            timerSeconds: 0,
+            timerInterval: null,
+            userAnswer: [], // Letters moved to answer slot
+            scrambledLetters: [], // Letter objects currently in pool
+            wordsStats: [], // Log per word: { original, solved, time, hintsUsed }
+            hintsUsedForCurrent: false
+        };
+
+        // Initialize on page load
+        window.onload = function() {
+            // Event listeners for teacher live preview
+            document.getElementById('input-words').addEventListener('input', updateLivePreview);
+            document.getElementById('input-case').addEventListener('change', updateLivePreview);
+
+            // Global Keypress Support for Student Mode
+            window.addEventListener('keydown', handleKeyboardInput);
+
+            // Check if URL contains hash payload
+            if (window.location.hash && window.location.hash.length > 1) {
+                const code = window.location.hash.substring(1);
+                switchTab('student');
+                loadActivityFromCode(code);
+            } else {
+                updateLivePreview();
+            }
+        };
+
+        function switchTab(tab) {
+            const teacherView = document.getElementById('view-teacher');
+            const studentView = document.getElementById('view-student');
+            const teacherBtn = document.getElementById('nav-teacher-btn');
+            const studentBtn = document.getElementById('nav-student-btn');
+
+            if (tab === 'teacher') {
+                teacherView.classList.remove('hidden');
+                studentView.classList.add('hidden');
+
+                teacherBtn.className = "px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center space-x-2 bg-white text-brand-600 shadow-sm";
+                studentBtn.className = "px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center space-x-2 text-slate-600 hover:text-slate-900";
+            } else {
+                teacherView.classList.add('hidden');
+                studentView.classList.remove('hidden');
+
+                studentBtn.className = "px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center space-x-2 bg-white text-brand-600 shadow-sm";
+                teacherBtn.className = "px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center space-x-2 text-slate-600 hover:text-slate-900";
+            }
+        }
+
+        // Robust Word Scramble Algorithm
+        function scrambleWord(word) {
+            const cleanWord = word.trim();
+            if (cleanWord.length <= 2) return cleanWord;
+
+            let letters = cleanWord.split('');
+            let scrambled = '';
+            let attempts = 0;
+
+            do {
+                // Fisher-Yates Shuffle algorithm
+                for (let i = letters.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [letters[i], letters[j]] = [letters[j], letters[i]];
+                }
+                scrambled = letters.join('');
+                attempts++;
+            } while (scrambled === cleanWord && attempts < 20);
+
+            return scrambled;
+        }
+
+        // Parse Teacher Input Textarea
+        function parseWordList() {
+            const rawText = document.getElementById('input-words').value;
+            const forceUpper = document.getElementById('input-case').value === 'upper';
+            const lines = rawText.split('\n');
+            const items = [];
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+
+                let word = trimmed;
+                let hint = '';
+
+                if (trimmed.includes(':')) {
+                    const parts = trimmed.split(':');
+                    word = parts[0].trim();
+                    hint = parts.slice(1).join(':').trim();
+                }
+
+                if (word.length > 0) {
+                    if (forceUpper) word = word.toUpperCase();
+                    items.push({ original: word, hint: hint });
+                }
+            });
+
+            return items;
+        }
+
+        // Live Preview Renderer in Teacher Mode
+        function updateLivePreview() {
+            const items = parseWordList();
+            const previewList = document.getElementById('preview-list');
+            const previewCount = document.getElementById('preview-count');
+
+            previewCount.textContent = `${items.length} Word${items.length === 1 ? '' : 's'}`;
+
+            if (items.length === 0) {
+                previewList.innerHTML = `<p class="text-slate-400 text-sm italic text-center py-10">Start entering words in the editor to see your scrambled preview here!</p>`;
+                return;
+            }
+
+            previewList.innerHTML = items.map((item, idx) => `
+                <div class="p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between text-sm">
+                    <div class="truncate mr-2">
+                        <span class="font-bold text-slate-800">${escapeHtml(item.original)}</span>
+                        ${item.hint ? `<span class="text-xs text-slate-400 block truncate">Hint: ${escapeHtml(item.hint)}</span>` : ''}
+                    </div>
+                    <span class="font-mono text-xs font-semibold px-2 py-1 bg-brand-50 text-brand-600 rounded-md shrink-0">
+                        ${scrambleWord(item.original)}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function generateActivityCode() {
+            const items = parseWordList();
+            if (items.length === 0) {
+                showToast("Please enter at least one word to generate an activity.", "warning");
+                return;
+            }
+
+            const payload = {
+                t: document.getElementById('input-title').value.trim() || 'Word Scramble Challenge',
+                i: document.getElementById('input-instructions').value.trim() || 'Unscramble each word correctly!',
+                tm: parseInt(document.getElementById('input-timer').value, 10) || 0,
+                w: items.map(item => [item.original, item.hint])
+            };
+
+            try {
+                // Encode to URL-safe Base64 String
+                const jsonStr = JSON.stringify(payload);
+                const encoded = btoa(encodeURIComponent(jsonStr));
+
+                document.getElementById('output-share-code').value = encoded;
+                
+                const fullLink = `${window.location.origin}${window.location.pathname}#${encoded}`;
+                document.getElementById('output-share-link').value = fullLink;
+
+                document.getElementById('share-output-card').classList.remove('hidden');
+                document.getElementById('share-output-card').scrollIntoView({ behavior: 'smooth' });
+
+                showToast("Activity Share Code Generated successfully!");
+            } catch (e) {
+                console.error("Encoding error:", e);
+                showToast("Error generating code. Check word inputs.", "error");
+            }
+        }
+
+        function launchStudentWithCurrentCode() {
+            const code = document.getElementById('output-share-code').value;
+            if (!code) return;
+            switchTab('student');
+            loadActivityFromCode(code);
+        }
+
+        function loadActivityFromInput() {
+            const code = document.getElementById('student-code-input').value.trim();
+            if (!code) {
+                showToast("Please enter a share code.", "warning");
+                return;
+            }
+            loadActivityFromCode(code);
+        }
+
+        function loadActivityFromCode(code) {
+            try {
+                const jsonStr = decodeURIComponent(atob(code));
+                const data = JSON.parse(jsonStr);
+
+                currentActivity = {
+                    title: data.t,
+                    instructions: data.i,
+                    timerLimit: data.tm,
+                    words: data.w.map(arr => ({ original: arr[0], hint: arr[1] }))
+                };
+
+                // Show Game view
+                document.getElementById('student-code-entry').classList.add('hidden');
+                document.getElementById('student-completion-card').classList.add('hidden');
+                document.getElementById('student-game-container').classList.remove('hidden');
+
+                // Initialize Game State
+                initGame();
+            } catch (e) {
+                console.error("Decoding error:", e);
+                showToast("Invalid or corrupted share code.", "error");
+            }
+        }
+
+        function initGame() {
+            gameState.currentIndex = 0;
+            gameState.score = 0;
+            gameState.timerSeconds = currentActivity.timerLimit > 0 ? currentActivity.timerLimit : 0;
+            gameState.wordsStats = [];
+
+            document.getElementById('game-title').textContent = currentActivity.title;
+            document.getElementById('game-instructions').textContent = currentActivity.instructions;
+            document.getElementById('game-score').textContent = "0";
+
+            startTimer();
+            loadWordIndex(0);
+        }
+
+        function startTimer() {
+            clearInterval(gameState.timerInterval);
+            updateTimerDisplay();
+
+            gameState.timerInterval = setInterval(() => {
+                if (currentActivity.timerLimit > 0) {
+                    // Countdown
+                    gameState.timerSeconds--;
+                    updateTimerDisplay();
+                    if (gameState.timerSeconds <= 0) {
+                        clearInterval(gameState.timerInterval);
+                        completeGame();
+                    }
+                } else {
+                    // Count Up
+                    gameState.timerSeconds++;
+                    updateTimerDisplay();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const m = Math.floor(gameState.timerSeconds / 60).toString().padStart(2, '0');
+            const s = (gameState.timerSeconds % 60).toString().padStart(2, '0');
+            document.getElementById('game-timer').textContent = `${m}:${s}`;
+        }
+
+        function loadWordIndex(index) {
+            if (index >= currentActivity.words.length) {
+                completeGame();
+                return;
+            }
+
+            gameState.currentIndex = index;
+            gameState.hintsUsedForCurrent = false;
+            gameState.userAnswer = [];
+
+            const currentWordObj = currentActivity.words[index];
+            const scrambledStr = scrambleWord(currentWordObj.original);
+
+            // Create Indexed Tile objects
+            gameState.scrambledLetters = scrambledStr.split('').map((char, i) => ({
+                id: `tile-${i}-${Math.random().toString(36).substr(2, 4)}`,
+                char: char
+            }));
+
+            // Progress UI
+            const total = currentActivity.words.length;
+            document.getElementById('game-progress-text').textContent = `Word ${index + 1} of ${total}`;
+            const pct = Math.round((index / total) * 100);
+            document.getElementById('game-progress-bar').style.width = `${pct}%`;
+            document.getElementById('game-progress-percent').textContent = `${pct}%`;
+
+            // Hint Banner setup
+            const hintBanner = document.getElementById('hint-banner');
+            const btnHint = document.getElementById('btn-hint');
+            if (currentWordObj.hint) {
+                btnHint.classList.remove('hidden');
+                hintBanner.classList.add('hidden');
+                document.getElementById('hint-text').textContent = currentWordObj.hint;
+            } else {
+                btnHint.classList.add('hidden');
+                hintBanner.classList.add('hidden');
+            }
+
+            renderTiles();
+        }
+
+        // Render Letter Slots and Letter Pool
+        function renderTiles() {
+            const answerContainer = document.getElementById('answer-slots-container');
+            const poolContainer = document.getElementById('scrambled-letters-container');
+
+            answerContainer.innerHTML = '';
+            poolContainer.innerHTML = '';
+
+            const currentWordObj = currentActivity.words[gameState.currentIndex];
+            const wordLength = currentWordObj.original.length;
+
+            // Render Selected Answer Slots
+            for (let i = 0; i < wordLength; i++) {
+                const tileObj = gameState.userAnswer[i];
+                if (tileObj) {
+                    const btn = document.createElement('button');
+                    btn.className = "tile w-12 h-14 sm:w-14 sm:h-16 bg-brand-600 text-white font-display font-extrabold text-2xl rounded-2xl shadow-md border-b-4 border-brand-800 flex items-center justify-center cursor-pointer hover:bg-brand-500 animate-pop";
+                    btn.textContent = tileObj.char;
+                    btn.onclick = () => deselectLetter(i);
+                    answerContainer.appendChild(btn);
+                } else {
+                    const slot = document.createElement('div');
+                    slot.className = "tile-slot w-12 h-14 sm:w-14 sm:h-16 rounded-2xl flex items-center justify-center";
+                    answerContainer.appendChild(slot);
+                }
+            }
+
+            // Render Scrambled Pool
+            gameState.scrambledLetters.forEach((tileObj) => {
+                const btn = document.createElement('button');
+                btn.className = "tile w-12 h-14 sm:w-14 sm:h-16 bg-slate-100 text-slate-800 font-display font-extrabold text-2xl rounded-2xl shadow-sm border border-slate-200 border-b-4 border-slate-300 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:border-slate-400";
+                btn.textContent = tileObj.char;
+                btn.onclick = () => selectLetter(tileObj);
+                poolContainer.appendChild(btn);
+            });
+        }
+
+        // Letter Tile Interactions
+        function selectLetter(tileObj) {
+            gameState.scrambledLetters = gameState.scrambledLetters.filter(t => t.id !== tileObj.id);
+            gameState.userAnswer.push(tileObj);
+            renderTiles();
+        }
+
+        function deselectLetter(answerIndex) {
+            const removed = gameState.userAnswer.splice(answerIndex, 1)[0];
+            if (removed) {
+                gameState.scrambledLetters.push(removed);
+                renderTiles();
+            }
+        }
+
+        function resetCurrentWord() {
+            gameState.userAnswer.forEach(tileObj => {
+                gameState.scrambledLetters.push(tileObj);
+            });
+            gameState.userAnswer = [];
+            renderTiles();
+        }
+
+        function revealHint() {
+            const hintBanner = document.getElementById('hint-banner');
+            if (hintBanner.classList.contains('hidden')) {
+                hintBanner.classList.remove('hidden');
+                gameState.score = Math.max(0, gameState.score - 10);
+                document.getElementById('game-score').textContent = gameState.score;
+                gameState.hintsUsedForCurrent = true;
+            }
+        }
+
+        // Keyboard Support
+        function handleKeyboardInput(e) {
+            const studentView = document.getElementById('view-student');
+            const gameContainer = document.getElementById('student-game-container');
+            
+            // Only capture keyboard in active student play view
+            if (studentView.classList.contains('hidden') || gameContainer.classList.contains('hidden')) return;
+
+            // Ignore typing inside input fields
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+            const key = e.key;
+
+            if (key === 'Backspace') {
+                e.preventDefault();
+                if (gameState.userAnswer.length > 0) {
+                    deselectLetter(gameState.userAnswer.length - 1);
+                }
+            } else if (key === 'Enter') {
+                e.preventDefault();
+                checkAnswer();
+            } else if (key.length === 1 && key.match(/[a-z0-9]/i)) {
+                // Find matching char in pool
+                const matchingTile = gameState.scrambledLetters.find(t => t.char.toLowerCase() === key.toLowerCase());
+                if (matchingTile) {
+                    selectLetter(matchingTile);
+                }
+            }
+        }
+
+        // Answer Verification
+        function checkAnswer() {
+            const currentWordObj = currentActivity.words[gameState.currentIndex];
+            const targetWord = currentWordObj.original;
+            const submittedStr = gameState.userAnswer.map(t => t.char).join('');
+
+            const arena = document.getElementById('answer-slots-container');
+
+            if (submittedStr === targetWord) {
+                // Correct Answer
+                confetti({
+                    particleCount: 40,
+                    spread: 60,
+                    origin: { y: 0.7 }
+                });
+
+                let pointsGained = 100;
+                if (gameState.hintsUsedForCurrent) pointsGained -= 20;
+
+                gameState.score += pointsGained;
+                document.getElementById('game-score').textContent = gameState.score;
+
+                gameState.wordsStats.push({
+                    original: targetWord,
+                    solved: true,
+                    points: pointsGained
+                });
+
+                showToast(`Correct! +${pointsGained} pts`, "success");
+
+                setTimeout(() => {
+                    loadWordIndex(gameState.currentIndex + 1);
+                }, 800);
+
+            } else {
+                // Incorrect - trigger shake animation
+                arena.classList.remove('animate-shake');
+                void arena.offsetWidth; // Trigger reflow
+                arena.classList.add('animate-shake');
+
+                showToast("Not quite right, try again!", "error");
+            }
+        }
+
+        function skipWord() {
+            const currentWordObj = currentActivity.words[gameState.currentIndex];
+            gameState.wordsStats.push({
+                original: currentWordObj.original,
+                solved: false,
+                points: 0
+            });
+
+            showToast(`Skipped: ${currentWordObj.original}`, "warning");
+            loadWordIndex(gameState.currentIndex + 1);
+        }
+
+        function completeGame() {
+            clearInterval(gameState.timerInterval);
+
+            document.getElementById('student-game-container').classList.add('hidden');
+            document.getElementById('student-completion-card').classList.remove('hidden');
+
+            // Grand Confetti Blast
+            confetti({
+                particleCount: 120,
+                spread: 100,
+                origin: { y: 0.5 }
+            });
+
+            // Final Stats Calculation
+            document.getElementById('final-score').textContent = gameState.score;
+            
+            // Format time string
+            let timeElapsed = gameState.timerSeconds;
+            if (currentActivity.timerLimit > 0) {
+                timeElapsed = currentActivity.timerLimit - gameState.timerSeconds;
+            }
+            const m = Math.floor(timeElapsed / 60).toString().padStart(2, '0');
+            const s = (timeElapsed % 60).toString().padStart(2, '0');
+            document.getElementById('final-time').textContent = `${m}:${s}`;
+
+            const solvedCount = gameState.wordsStats.filter(w => w.solved).length;
+            const accuracyPct = Math.round((solvedCount / currentActivity.words.length) * 100) || 0;
+            document.getElementById('final-accuracy').textContent = `${accuracyPct}%`;
+
+            // Summary List
+            const summaryList = document.getElementById('summary-word-list');
+            summaryList.innerHTML = gameState.wordsStats.map(w => `
+                <div class="flex items-center justify-between p-2.5 rounded-xl ${w.solved ? 'bg-emerald-50 text-emerald-900 border border-emerald-100' : 'bg-slate-50 text-slate-500'} text-xs font-semibold">
+                    <span class="flex items-center">
+                        <i class="fa-solid ${w.solved ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-slate-400'} mr-2 text-sm"></i>
+                        ${escapeHtml(w.original)}
+                    </span>
+                    <span>${w.solved ? `+${w.points} pts` : 'Skipped'}</span>
+                </div>
+            `).join('');
+        }
+
+        function restartActivity() {
+            document.getElementById('student-completion-card').classList.add('hidden');
+            document.getElementById('student-game-container').classList.remove('hidden');
+            initGame();
+        }
+
+        // Utility: Copy to Clipboard
+        function copyToClipboard(inputId, successMsg) {
+            const inputEl = document.getElementById(inputId);
+            inputEl.select();
+            document.execCommand('copy');
+            showToast(successMsg, "success");
+        }
+
+        // Utility: Toast Notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMessage.textContent = message;
+
+            if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+            } else if (type === 'warning') {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-amber-400';
+            } else if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-info text-brand-400';
+            }
+
+            toast.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+            }, 2500);
+        }
+
+        // Utility: HTML Sanitize
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
